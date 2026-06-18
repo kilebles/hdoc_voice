@@ -1,0 +1,15 @@
+.git
+.gitignore
+.venv
+.env
+.env.*
+__pycache__
+*.py[cod]
+*.log
+.DS_Store
+.vscode/
+.idea/
+Dockerfile*
+compose.yaml
+README.md
+"Текстовый документ.txt"

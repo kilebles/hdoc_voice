@@ -6,9 +6,14 @@ import time
 from typing import Literal, Optional
 
 import httpx
+from loguru import logger
 from pydantic import BaseModel, Field, UUID4
 
 from settings import settings as _default_settings, Settings
+
+
+RETRY_ATTEMPTS = 5
+RETRY_BACKOFF = 2.0  # seconds, doubles each attempt
 
 
 # ------------------------------------------------------------------ #
@@ -123,6 +128,19 @@ class VoicerClient:
     def __exit__(self, *_) -> None:
         self.close()
 
+    def _retry(self, fn, *args, **kwargs):
+        """Call fn with exponential backoff retries."""
+        delay = RETRY_BACKOFF
+        for attempt in range(1, RETRY_ATTEMPTS + 1):
+            try:
+                return fn(*args, **kwargs)
+            except Exception as e:
+                if attempt == RETRY_ATTEMPTS:
+                    raise
+                logger.warning("Attempt {}/{} failed: {}. Retrying in {:.0f}s...", attempt, RETRY_ATTEMPTS, e, delay)
+                time.sleep(delay)
+                delay *= 2
+
     # ------------------------------------------------------------------ #
     # Balance                                                              #
     # ------------------------------------------------------------------ #
@@ -191,7 +209,7 @@ class VoicerClient:
         """Poll until task reaches terminal status. Uses timeouts from settings."""
         deadline = time.monotonic() + self._cfg.voicer_task_timeout
         while time.monotonic() < deadline:
-            status = self.get_task_status(task_id)
+            status = self._retry(self.get_task_status, task_id)
             if status.status in ("ending", "ending_processed"):
                 return status
             if status.status in ("error", "error_handled"):
@@ -206,10 +224,10 @@ class VoicerClient:
         template: Optional[VoiceTemplate] = None,
         chunk_size: Optional[int] = None,
     ) -> bytes:
-        """High-level helper: create task → wait → return audio bytes (MP3 or ZIP)."""
-        created = self.create_task(text, template_uuid=template_uuid, template=template, chunk_size=chunk_size)
+        """High-level helper with retries: create task → wait → return audio bytes."""
+        created = self._retry(self.create_task, text, template_uuid=template_uuid, template=template, chunk_size=chunk_size)
         self.wait_for_task(created.task_id)
-        return self.download_result(created.task_id)
+        return self._retry(self.download_result, created.task_id)
 
     # ------------------------------------------------------------------ #
     # Image generation                                                     #
@@ -223,7 +241,6 @@ class VoicerClient:
         seed: Optional[int] = None,
         reference_images: Optional[list[str]] = None,
     ) -> str:
-        """Returns operation_id."""
         payload: dict = {"prompt": prompt, "model": model, "aspect_ratio": aspect_ratio}
         if seed is not None:
             payload["seed"] = seed
@@ -239,7 +256,6 @@ class VoicerClient:
         aspect_ratio: Literal["16:9", "9:16", "1:1"] = "1:1",
         reference_image: Optional[str] = None,
     ) -> str:
-        """Returns operation_id."""
         payload: dict = {"prompt": prompt, "aspect_ratio": aspect_ratio}
         if reference_image:
             payload["reference_image"] = reference_image
@@ -253,7 +269,6 @@ class VoicerClient:
         aspect_ratio: str = "1:1",
         reference_images: Optional[list[str]] = None,
     ) -> str:
-        """Returns operation_id."""
         payload: dict = {"prompt": prompt, "aspect_ratio": aspect_ratio}
         if reference_images:
             payload["reference_images"] = reference_images
@@ -267,10 +282,9 @@ class VoicerClient:
         return OperationResponse.model_validate(r.json())
 
     def wait_for_image(self, operation_id: str) -> list[str]:
-        """Poll until image operation succeeds. Returns list of base64 data-URI strings."""
         deadline = time.monotonic() + self._cfg.voicer_image_timeout
         while time.monotonic() < deadline:
-            op = self.get_operation(operation_id)
+            op = self._retry(self.get_operation, operation_id)
             if op.status == "success":
                 return op.result or []
             if op.status == "error":
