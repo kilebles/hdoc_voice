@@ -16,8 +16,8 @@ class Job:
     file_name: str
     paragraphs: list[str]
     template_uuid: str
-    on_progress: Callable[[int, int], None]
-    on_done: Callable[[bytes, str], None]        # archive_bytes, zip_name
+    on_fragment: Callable[[int, int, bytes], None]   # idx, total, audio_bytes
+    on_done: Callable[[], None]
     on_error: Callable[[Exception], None]
 
 
@@ -48,14 +48,13 @@ class UserQueue:
                 from concurrent.futures import ThreadPoolExecutor
                 loop = asyncio.get_event_loop()
                 with ThreadPoolExecutor(max_workers=1) as ex:
-                    archive = await loop.run_in_executor(
+                    await loop.run_in_executor(
                         ex,
                         lambda j=job: tts_service.synthesize_batch(
-                            j.paragraphs, j.template_uuid, j.on_progress
+                            j.paragraphs, j.template_uuid, j.on_fragment
                         ),
                     )
-                zip_name = job.file_name.removesuffix(".txt") + ".zip"
-                await job.on_done(archive, zip_name)
+                await job.on_done()
                 logger.info("User {} — job '{}' done", uid, job.file_name)
             except Exception as e:
                 logger.exception("User {} — job '{}' failed", uid, job.file_name)

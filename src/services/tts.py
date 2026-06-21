@@ -1,5 +1,3 @@
-import io
-import zipfile
 from typing import Callable
 
 from loguru import logger
@@ -22,21 +20,16 @@ class TTSService:
         self,
         paragraphs: list[str],
         template_uuid: str,
-        on_progress: Callable[[int, int], None] | None = None,
-    ) -> bytes:
+        on_fragment: Callable[[int, int, bytes], None] | None = None,
+    ) -> None:
         """
-        Synthesize each paragraph into a separate MP3,
-        pack into a ZIP. Files named 01.mp3, 02.mp3, ...
-        on_progress(done, total) called after each fragment.
+        Synthesize each paragraph and call on_fragment(idx, total, audio_bytes)
+        immediately after each one is ready.
         """
         total = len(paragraphs)
-        buf = io.BytesIO()
-        with zipfile.ZipFile(buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-            for idx, text in enumerate(paragraphs, start=1):
-                logger.info("Synthesizing {}/{}: {:.60s}...", idx, total, text)
-                audio = self._client.synthesize(text, template_uuid=template_uuid)
-                zf.writestr(f"{idx:02d}.mp3", audio)
-                logger.debug("Fragment {}/{} done ({} bytes)", idx, total, len(audio))
-                if on_progress:
-                    on_progress(idx, total)
-        return buf.getvalue()
+        for idx, text in enumerate(paragraphs, start=1):
+            logger.info("Synthesizing {}/{}: {:.60s}...", idx, total, text)
+            audio = self._client.synthesize(text, template_uuid=template_uuid)
+            logger.debug("Fragment {}/{} done ({} bytes)", idx, total, len(audio))
+            if on_fragment:
+                on_fragment(idx, total, audio)

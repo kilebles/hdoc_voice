@@ -67,13 +67,15 @@ async def on_file_received(
     total = len(paragraphs)
     user_id = message.from_user.id  # type: ignore[union-attr]
     file_name = doc.file_name  # type: ignore[union-attr]
+    base_name = file_name.removesuffix(".txt")
 
     logger.info("User {} queued '{}' — {} paragraphs, template {}", user_id, file_name, total, template_uuid)
 
     status = await message.answer(f"0 / {total}")
+
+    # progress counter written from worker thread, read from async timer
     progress: dict[str, int] = {"done": 0}
 
-    # Progress updater — edits message every PROGRESS_INTERVAL seconds
     async def _update_status() -> None:
         last = ""
         while True:
@@ -88,15 +90,20 @@ async def on_file_received(
 
     updater = asyncio.create_task(_update_status())
 
-    def on_progress(done: int, _total: int) -> None:
-        progress["done"] = done
+    # called from worker thread — schedules coroutine on event loop
+    def on_fragment(idx: int, _total: int, audio: bytes) -> None:
+        progress["done"] = idx
+        name = f"{base_name} — {idx:02d}.mp3"
+        audio_file = BufferedInputFile(audio, filename=name)
+        asyncio.run_coroutine_threadsafe(
+            message.answer_audio(audio_file, title=f"{base_name} — {idx:02d}", performer=""),
+            asyncio.get_event_loop(),
+        )
 
-    async def on_done(archive: bytes, zip_name: str) -> None:
+    async def on_done() -> None:
         updater.cancel()
         await status.delete()
-        zip_file = BufferedInputFile(archive, filename=zip_name)
-        await message.answer_document(zip_file)
-        logger.info("Sent {} ({} bytes) to user {}", zip_name, len(archive), user_id)
+        logger.info("All {} fragments sent to user {}", total, user_id)
 
     async def on_error(e: Exception) -> None:
         updater.cancel()
@@ -108,13 +115,12 @@ async def on_file_received(
             file_name=file_name,
             paragraphs=paragraphs,
             template_uuid=template_uuid,
-            on_progress=on_progress,
+            on_fragment=on_fragment,
             on_done=on_done,
             on_error=on_error,
         ),
         tts,
     )
 
-    # If queued behind other jobs — notify user
     if queue_size > 1:
         await message.answer(f"Файл добавлен в очередь (позиция {queue_size}).")

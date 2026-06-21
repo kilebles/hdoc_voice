@@ -12,8 +12,9 @@ from pydantic import BaseModel, Field, UUID4
 from settings import settings as _default_settings, Settings
 
 
-RETRY_ATTEMPTS = 5
-RETRY_BACKOFF = 2.0  # seconds, doubles each attempt
+RETRY_ATTEMPTS = 10
+RETRY_BACKOFF = 2.0   # seconds, doubles each attempt
+RETRY_429_WAIT = 30.0  # seconds to wait on rate limit
 
 
 # ------------------------------------------------------------------ #
@@ -129,11 +130,21 @@ class VoicerClient:
         self.close()
 
     def _retry(self, fn, *args, **kwargs):
-        """Call fn with exponential backoff retries."""
+        """Call fn with exponential backoff retries. 429 gets a fixed long wait."""
         delay = RETRY_BACKOFF
         for attempt in range(1, RETRY_ATTEMPTS + 1):
             try:
                 return fn(*args, **kwargs)
+            except httpx.HTTPStatusError as e:
+                if attempt == RETRY_ATTEMPTS:
+                    raise
+                if e.response.status_code == 429:
+                    logger.warning("Rate limited (429). Waiting {:.0f}s before retry...", RETRY_429_WAIT)
+                    time.sleep(RETRY_429_WAIT)
+                else:
+                    logger.warning("Attempt {}/{} HTTP error: {}. Retrying in {:.0f}s...", attempt, RETRY_ATTEMPTS, e, delay)
+                    time.sleep(delay)
+                    delay *= 2
             except Exception as e:
                 if attempt == RETRY_ATTEMPTS:
                     raise
