@@ -1,4 +1,6 @@
 import asyncio
+import io
+import zipfile
 
 from loguru import logger
 
@@ -87,8 +89,11 @@ async def on_file_received(
 
     updater = asyncio.create_task(_update_status())
 
+    collected: list[tuple[int, bytes]] = []  # (idx, audio)
+
     async def on_fragment(idx: int, _total: int, audio: bytes) -> None:
         progress["done"] = idx
+        collected.append((idx, audio))
         name = f"{base_name} — {idx:02d}.mp3"
         audio_file = BufferedInputFile(audio, filename=name)
         await message.answer_audio(audio_file, title=f"{base_name} — {idx:02d}", performer="")
@@ -96,7 +101,16 @@ async def on_file_received(
     async def on_done() -> None:
         updater.cancel()
         await status.delete()
-        logger.info("All {} fragments sent to user {}", total, user_id)
+
+        # Build ZIP from already-verified MP3 bytes
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for idx, audio in sorted(collected):
+                zf.writestr(f"{idx:02d}.mp3", audio)
+        zip_file = BufferedInputFile(buf.getvalue(), filename=f"{base_name}.zip")
+        await message.answer_document(zip_file)
+
+        logger.info("All {} fragments sent + archive to user {}", total, user_id)
 
     async def on_error(e: Exception) -> None:
         updater.cancel()
