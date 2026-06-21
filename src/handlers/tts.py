@@ -91,7 +91,7 @@ async def on_file_received(
     updater = asyncio.create_task(_update_status())
 
     # capture the running loop in the async context before entering the thread
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     # called from worker thread — schedules coroutine on the captured event loop
     def on_fragment(idx: int, _total: int, audio: bytes) -> None:
