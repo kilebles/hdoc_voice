@@ -20,7 +20,6 @@ PROGRESS_INTERVAL = 20  # seconds
 
 
 def _parse_paragraphs(text: str) -> list[str]:
-    """Split text by blank lines (handles \\r\\n and \\n), drop empty chunks."""
     normalized = text.replace("\r\n", "\n").replace("\r", "\n")
     return [p.strip() for p in normalized.split("\n\n") if p.strip()]
 
@@ -72,8 +71,6 @@ async def on_file_received(
     logger.info("User {} queued '{}' — {} paragraphs, template {}", user_id, file_name, total, template_uuid)
 
     status = await message.answer(f"0 / {total}")
-
-    # progress counter written from worker thread, read from async timer
     progress: dict[str, int] = {"done": 0}
 
     async def _update_status() -> None:
@@ -90,18 +87,11 @@ async def on_file_received(
 
     updater = asyncio.create_task(_update_status())
 
-    # capture the running loop in the async context before entering the thread
-    loop = asyncio.get_running_loop()
-
-    # called from worker thread — schedules coroutine on the captured event loop
-    def on_fragment(idx: int, _total: int, audio: bytes) -> None:
+    async def on_fragment(idx: int, _total: int, audio: bytes) -> None:
         progress["done"] = idx
         name = f"{base_name} — {idx:02d}.mp3"
         audio_file = BufferedInputFile(audio, filename=name)
-        asyncio.run_coroutine_threadsafe(
-            message.answer_audio(audio_file, title=f"{base_name} — {idx:02d}", performer=""),
-            loop,
-        )
+        await message.answer_audio(audio_file, title=f"{base_name} — {idx:02d}", performer="")
 
     async def on_done() -> None:
         updater.cancel()
@@ -113,16 +103,11 @@ async def on_file_received(
         await status.edit_text(f"Ошибка: {e}")
 
     queue_size = user_queue.enqueue(
-        Job(
-            user_id=user_id,
-            file_name=file_name,
-            paragraphs=paragraphs,
-            template_uuid=template_uuid,
-            on_fragment=on_fragment,
-            on_done=on_done,
-            on_error=on_error,
-        ),
+        Job(user_id=user_id, file_name=file_name, paragraphs=paragraphs, template_uuid=template_uuid),
         tts,
+        on_fragment,
+        on_done,
+        on_error,
     )
 
     if queue_size > 1:

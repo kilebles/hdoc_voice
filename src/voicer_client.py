@@ -210,11 +210,19 @@ class VoicerClient:
         return TaskStatus.model_validate(r.json())
 
     def download_result(self, task_id: int) -> bytes:
+        import io, zipfile
         r = self._client.get(f"/tasks/{task_id}/result")
         if r.status_code == 202:
             raise RuntimeError("Task result is not ready yet")
         r.raise_for_status()
-        return r.content
+        data = r.content
+        # API may return a ZIP when the text is long — extract the first MP3
+        if data[:2] == b'PK':
+            with zipfile.ZipFile(io.BytesIO(data)) as zf:
+                mp3_files = sorted(n for n in zf.namelist() if n.endswith('.mp3'))
+                if mp3_files:
+                    data = zf.read(mp3_files[0])
+        return data
 
     def wait_for_task(self, task_id: int) -> TaskStatus:
         """Poll until task reaches terminal status. Uses timeouts from settings."""
