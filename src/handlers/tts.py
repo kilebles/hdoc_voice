@@ -90,14 +90,17 @@ async def on_file_received(
 
     updater = asyncio.create_task(_update_status())
 
-    # called from worker thread — schedules coroutine on event loop
+    # capture the running loop in the async context before entering the thread
+    loop = asyncio.get_event_loop()
+
+    # called from worker thread — schedules coroutine on the captured event loop
     def on_fragment(idx: int, _total: int, audio: bytes) -> None:
         progress["done"] = idx
         name = f"{base_name} — {idx:02d}.mp3"
         audio_file = BufferedInputFile(audio, filename=name)
         asyncio.run_coroutine_threadsafe(
             message.answer_audio(audio_file, title=f"{base_name} — {idx:02d}", performer=""),
-            asyncio.get_event_loop(),
+            loop,
         )
 
     async def on_done() -> None:
