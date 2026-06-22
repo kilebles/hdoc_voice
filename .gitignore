@@ -9,3 +9,10 @@ wheels/
 # Virtual environments
 .venv
 .env
+
+# OS
+.DS_Store
+
+# Test/sample files
+*.txt
+*.docx
