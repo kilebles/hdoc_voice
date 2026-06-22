@@ -1,7 +1,9 @@
 import asyncio
 import io
+import re
 import zipfile
 
+from docx import Document
 from loguru import logger
 
 from aiogram import Router, F
@@ -9,7 +11,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     CallbackQuery,
     Message,
-    BufferedInputFile,  # used for ZIP
+    BufferedInputFile,
 )
 
 from services.tts import TTSService
@@ -20,10 +22,26 @@ tts_router = Router(name="tts")
 
 PROGRESS_INTERVAL = 20  # seconds
 
+_DOCX_SKIP_RE = re.compile(r'^\s*(introduction|chapter\s+\d+[\.\:])', re.IGNORECASE)
 
-def _parse_paragraphs(text: str) -> list[str]:
+
+def _parse_txt(raw: bytes) -> list[str]:
+    text = raw.decode("utf-8")
     normalized = text.replace("\r\n", "\n").replace("\r", "\n")
     return [p.strip() for p in normalized.split("\n\n") if p.strip()]
+
+
+def _parse_docx(raw: bytes) -> list[str]:
+    doc = Document(io.BytesIO(raw))
+    result = []
+    for p in doc.paragraphs:
+        text = p.text.strip()
+        if not text:
+            continue
+        if _DOCX_SKIP_RE.match(text):
+            continue
+        result.append(text)
+    return result
 
 
 @tts_router.callback_query(TTSForm.choosing_template, F.data.startswith("tpl:"))
@@ -38,7 +56,7 @@ async def on_template_chosen(callback: CallbackQuery, state: FSMContext) -> None
     logger.info("User {} chose template: {} ({})", callback.from_user.id, template_name, template_uuid)  # type: ignore[union-attr]
 
     await callback.message.edit_text(  # type: ignore[union-attr]
-        f"Голос: <b>{template_name}</b>\n\nПришлите .txt файл для обработки."
+        f"Голос: <b>{template_name}</b>\n\nПришлите .txt или .docx файл для обработки."
     )
     await callback.answer()
 
@@ -48,9 +66,10 @@ async def on_file_received(
     message: Message, state: FSMContext, tts: TTSService, user_queue: UserQueue
 ) -> None:
     doc = message.document
+    file_name = doc.file_name  # type: ignore[union-attr]
 
-    if not doc.file_name.endswith(".txt"):  # type: ignore[union-attr]
-        await message.answer("Поддерживается только формат .txt.")
+    if not (file_name.endswith(".txt") or file_name.endswith(".docx")):
+        await message.answer("Поддерживается только формат .txt или .docx.")
         return
 
     data = await state.get_data()
@@ -58,17 +77,21 @@ async def on_file_received(
 
     file = await message.bot.get_file(doc.file_id)  # type: ignore[union-attr]
     downloaded = await message.bot.download_file(file.file_path)  # type: ignore[union-attr]
-    text = downloaded.read().decode("utf-8")  # type: ignore[union-attr]
+    raw = downloaded.read()  # type: ignore[union-attr]
 
-    paragraphs = _parse_paragraphs(text)
+    if file_name.endswith(".docx"):
+        paragraphs = _parse_docx(raw)
+        base_name = file_name.removesuffix(".docx")
+    else:
+        paragraphs = _parse_txt(raw)
+        base_name = file_name.removesuffix(".txt")
+
     if not paragraphs:
         await message.answer("Файл пустой или не содержит текста.")
         return
 
     total = len(paragraphs)
     user_id = message.from_user.id  # type: ignore[union-attr]
-    file_name = doc.file_name  # type: ignore[union-attr]
-    base_name = file_name.removesuffix(".txt")
 
     logger.info("User {} queued '{}' — {} paragraphs, template {}", user_id, file_name, total, template_uuid)
 
@@ -89,7 +112,7 @@ async def on_file_received(
 
     updater = asyncio.create_task(_update_status())
 
-    collected: list[tuple[int, bytes]] = []  # (idx, audio)
+    collected: list[tuple[int, bytes]] = []
 
     async def on_fragment(idx: int, _total: int, audio: bytes) -> None:
         progress["done"] = idx
@@ -99,15 +122,14 @@ async def on_file_received(
         updater.cancel()
         await status.delete()
 
-        # Build ZIP from already-verified MP3 bytes
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
             for idx, audio in sorted(collected):
-                zf.writestr(f"{idx:02d}.mp3", audio)
+                zf.writestr(f"{idx:03d}.mp3", audio)
         zip_file = BufferedInputFile(buf.getvalue(), filename=f"{base_name}.zip")
         await message.answer_document(zip_file)
 
-        logger.info("All {} fragments sent + archive to user {}", total, user_id)
+        logger.info("Sent archive ({} fragments) to user {}", total, user_id)
 
     async def on_error(e: Exception) -> None:
         updater.cancel()
