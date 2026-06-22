@@ -9,7 +9,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     CallbackQuery,
     Message,
-    BufferedInputFile,
+    BufferedInputFile,  # used for ZIP
 )
 
 from services.tts import TTSService
@@ -94,9 +94,6 @@ async def on_file_received(
     async def on_fragment(idx: int, _total: int, audio: bytes) -> None:
         progress["done"] = idx
         collected.append((idx, audio))
-        name = f"{base_name} — {idx:02d}.mp3"
-        audio_file = BufferedInputFile(audio, filename=name)
-        await message.answer_audio(audio_file, title=f"{base_name} — {idx:02d}", performer="")
 
     async def on_done() -> None:
         updater.cancel()
