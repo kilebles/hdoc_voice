@@ -11,4 +11,8 @@ dependencies = [
     "pydantic>=2.13.4",
     "pydantic-settings>=2.0",
     "python-docx>=1.2.0",
+    "fish-audio-sdk>=0.1.0",
 ]
+
+[tool.uv.sources]
+fish-audio-sdk = { git = "https://github.com/fishaudio/fish-audio-python.git" }

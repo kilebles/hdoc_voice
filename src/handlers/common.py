@@ -1,40 +1,38 @@
 from aiogram import Router
-from aiogram.filters import CommandStart
+from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message
 
-from services.tts import TTSService
-from states.tts import TTSForm
+from src.keyboards.voices import voices_keyboard
+from src.services.queue import UserQueue
+from src.states.tts import TTSForm
 
-common_router = Router(name="common")
-
-
-def _start_keyboard(templates: list) -> InlineKeyboardMarkup:
-    buttons = [
-        [InlineKeyboardButton(text=t.name, callback_data=f"tpl:{t.uuid}")]
-        for t in templates
-    ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+router = Router(name="common")
 
 
-@common_router.message(CommandStart())
-async def cmd_start(message: Message, state: FSMContext, tts: TTSService) -> None:
-    # Only reset the template-selection state, never touch an active generation
+@router.message(CommandStart())
+async def cmd_start(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await state.set_state(TTSForm.choosing_voice)
+    await message.answer("Выберите голос:", reply_markup=voices_keyboard())
+
+
+@router.message(Command("cancel"))
+async def cmd_cancel(message: Message, state: FSMContext) -> None:
     current = await state.get_state()
-    if current != TTSForm.waiting_for_file.state:
-        await state.clear()
+    await state.clear()
+    await state.set_state(TTSForm.choosing_voice)
+    if current is None:
+        await message.answer("Нечего отменять.")
+    else:
+        await message.answer("Отменено.")
+    await message.answer("Выберите голос:", reply_markup=voices_keyboard())
 
-    templates = tts.get_templates()
-    balance = tts.get_balance_text()
 
-    if not templates:
-        await message.answer("Нет доступных голосов.")
-        return
-
-    await state.set_state(TTSForm.choosing_template)
-    await state.update_data(templates={str(t.uuid): t.name for t in templates})
-
-    await message.answer(
-        f"Баланс: {balance}\n\nВыберите голос:",
-        reply_markup=_start_keyboard(templates),
-    )
+@router.message(Command("clearqueue"))
+async def cmd_clearqueue(message: Message, user_queue: UserQueue) -> None:
+    removed = user_queue.clear(message.from_user.id)
+    if removed == 0:
+        await message.answer("Очередь пуста.")
+    else:
+        await message.answer(f"Удалено из очереди: {removed}.")

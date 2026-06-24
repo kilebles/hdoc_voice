@@ -1,74 +1,105 @@
-"""
-Per-user job queue. Each user gets one asyncio.Queue.
-Jobs run sequentially per user, but different users run in parallel.
-"""
-
 import asyncio
-from dataclasses import dataclass, field
-from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 
-from loguru import logger
+from aiogram import Bot
 
 
 @dataclass
-class Job:
+class TTSJob:
     user_id: int
-    file_name: str
-    paragraphs: list[str]
-    template_uuid: str
+    chat_id: int
+    voice_id: str
+    filename: str
+    chunks: list[str]
 
 
 class UserQueue:
-    """Manages one asyncio.Queue + worker task per user."""
+    """Per-user job queue with a background worker per user."""
 
-    def __init__(self) -> None:
-        self._queues: dict[int, asyncio.Queue[Job]] = {}
+    def __init__(self, bot: Bot, tts_service) -> None:
+        self._bot = bot
+        self._tts = tts_service
+        self._queues: dict[int, asyncio.Queue[TTSJob | None]] = {}
         self._workers: dict[int, asyncio.Task] = {}
-        self._executor = ThreadPoolExecutor()
 
-    def enqueue(self, job: Job, tts_service, on_fragment, on_done, on_error) -> int:
-        uid = job.user_id
-        if uid not in self._queues:
-            self._queues[uid] = asyncio.Queue()
-            self._workers[uid] = asyncio.create_task(
-                self._worker(uid, tts_service), name=f"worker-{uid}"
-            )
-        self._queues[uid].put_nowait((job, on_fragment, on_done, on_error))
-        return self._queues[uid].qsize()
+    def _ensure_worker(self, user_id: int) -> None:
+        if user_id not in self._queues:
+            self._queues[user_id] = asyncio.Queue()
+        task = self._workers.get(user_id)
+        if task is None or task.done():
+            self._workers[user_id] = asyncio.create_task(self._worker(user_id))
 
-    async def _worker(self, uid: int, tts_service) -> None:
-        q = self._queues[uid]
-        while True:
-            job, on_fragment, on_done, on_error = await q.get()
-            logger.info("User {} — starting job '{}' ({} paragraphs)", uid, job.file_name, len(job.paragraphs))
+    async def enqueue(self, job: TTSJob) -> int:
+        """Add job to queue. Returns queue size after adding."""
+        self._ensure_worker(job.user_id)
+        await self._queues[job.user_id].put(job)
+        return self._queues[job.user_id].qsize()
+
+    def clear(self, user_id: int) -> int:
+        """Drain the queue (current job keeps running). Returns number of removed jobs."""
+        q = self._queues.get(user_id)
+        if q is None:
+            return 0
+        count = 0
+        while not q.empty():
             try:
-                # audio_queue bridges the thread and async world
-                audio_queue: asyncio.Queue = asyncio.Queue()
-                loop = asyncio.get_running_loop()
+                q.get_nowait()
+                count += 1
+            except asyncio.QueueEmpty:
+                break
+        return count
 
-                def produce():
-                    total = len(job.paragraphs)
-                    for idx, text in enumerate(job.paragraphs, start=1):
-                        logger.info("Synthesizing {}/{}: {:.60s}...", idx, total, text)
-                        audio = tts_service._client.synthesize(text, template_uuid=job.template_uuid)
-                        logger.debug("Fragment {}/{} done ({} bytes)", idx, total, len(audio))
-                        loop.call_soon_threadsafe(audio_queue.put_nowait, (idx, total, audio))
-                    loop.call_soon_threadsafe(audio_queue.put_nowait, None)  # sentinel
+    def pending(self, user_id: int) -> int:
+        q = self._queues.get(user_id)
+        return q.qsize() if q else 0
 
-                fut = loop.run_in_executor(self._executor, produce)
+    async def _worker(self, user_id: int) -> None:
+        import io
+        import zipfile
 
-                while True:
-                    item = await audio_queue.get()
-                    if item is None:
-                        break
-                    idx, total, audio = item
-                    await on_fragment(idx, total, audio)
+        q = self._queues[user_id]
+        while True:
+            job = await q.get()
+            if job is None:
+                break
+            try:
+                total = len(job.chunks)
+                status = await self._bot.send_message(job.chat_id, f"0/{total}")
 
-                await fut  # re-raise any exception from thread
-                await on_done()
-                logger.info("User {} — job '{}' done", uid, job.file_name)
+                sem = asyncio.Semaphore(5)
+                done = 0
+                audio_files: list[tuple[str, bytes]] = [("", b"")] * total
+
+                async def synthesize_chunk(idx: int, text: str) -> None:
+                    nonlocal done
+                    async with sem:
+                        audio_bytes = await self._tts.synthesize(text, job.voice_id)
+                    audio_files[idx] = (f"{idx + 1}.mp3", audio_bytes)
+                    done += 1
+                    await status.edit_text(f"{done}/{total}")
+
+                await asyncio.gather(
+                    *[synthesize_chunk(i, chunk) for i, chunk in enumerate(job.chunks)]
+                )
+
+                zip_buf = io.BytesIO()
+                with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+                    for fname, data in audio_files:
+                        zf.writestr(fname, data)
+                zip_buf.seek(0)
+
+                from aiogram.types import BufferedInputFile
+                stem = job.filename.rsplit(".", 1)[0]
+                await self._bot.send_document(
+                    job.chat_id,
+                    BufferedInputFile(zip_buf.read(), filename=f"{stem}.zip"),
+                )
+                await status.delete()
+
+                if q.empty():
+                    await self._bot.send_message(job.chat_id, "Очередь пуста.")
+
             except Exception as e:
-                logger.exception("User {} — job '{}' failed", uid, job.file_name)
-                await on_error(e)
+                await self._bot.send_message(job.chat_id, f"Ошибка: {e}")
             finally:
                 q.task_done()

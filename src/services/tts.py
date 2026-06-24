@@ -1,15 +1,17 @@
-from loguru import logger
-
-from voicer_client import VoicerClient, TemplateResponse
+from fishaudio import AsyncFishAudio
 
 
 class TTSService:
-    def __init__(self, client: VoicerClient) -> None:
-        self._client = client
+    def __init__(self, api_key: str) -> None:
+        self._client = AsyncFishAudio(api_key=api_key)
 
-    def get_templates(self) -> list[TemplateResponse]:
-        return self._client.get_templates()
+    async def synthesize(self, text: str, voice_id: str) -> bytes:
+        return await self._client.tts.convert(
+            text=text,
+            reference_id=voice_id,
+            model="s2.1-pro",
+            latency="normal",
+        )
 
-    def get_balance_text(self) -> str:
-        balance = self._client.get_balance()
-        return balance.balance_description.ru
+    async def close(self) -> None:
+        await self._client.close()

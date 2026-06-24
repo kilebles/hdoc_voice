@@ -1,0 +1,400 @@
+> ## Documentation Index
+> Fetch the complete documentation index at: https://docs.fish.audio/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Core
+
+<a id="fishaudio.core.client_wrapper" />
+
+# fishaudio.core.client\_wrapper
+
+HTTP client wrapper for managing requests and authentication.
+
+<a id="fishaudio.core.client_wrapper.BaseClientWrapper" />
+
+## BaseClientWrapper Objects
+
+```python theme={null}
+class BaseClientWrapper()
+```
+
+Base wrapper with shared logic for sync/async clients.
+
+<a id="fishaudio.core.client_wrapper.BaseClientWrapper.get_headers" />
+
+#### get\_headers
+
+```python theme={null}
+def get_headers(
+        additional_headers: Optional[dict[str, str]] = None) -> dict[str, str]
+```
+
+Build headers including authentication and user agent.
+
+<a id="fishaudio.core.client_wrapper.ClientWrapper" />
+
+## ClientWrapper Objects
+
+```python theme={null}
+class ClientWrapper(BaseClientWrapper)
+```
+
+Wrapper for httpx.Client that handles authentication and error handling.
+
+<a id="fishaudio.core.client_wrapper.ClientWrapper.request" />
+
+#### request
+
+```python theme={null}
+def request(method: str,
+            path: str,
+            *,
+            request_options: Optional[RequestOptions] = None,
+            **kwargs: Any) -> httpx.Response
+```
+
+Make an HTTP request with error handling.
+
+**Arguments**:
+
+* `method` - HTTP method (GET, POST, etc.)
+* `path` - API endpoint path
+* `request_options` - Optional request-level overrides
+* `**kwargs` - Additional arguments to pass to httpx.request
+
+**Returns**:
+
+httpx.Response object
+
+**Raises**:
+
+* `APIError` - On non-2xx responses
+
+<a id="fishaudio.core.client_wrapper.ClientWrapper.client" />
+
+#### client
+
+```python theme={null}
+@property
+def client() -> httpx.Client
+```
+
+Get underlying httpx.Client for advanced usage (e.g., WebSockets).
+
+<a id="fishaudio.core.client_wrapper.ClientWrapper.close" />
+
+#### close
+
+```python theme={null}
+def close() -> None
+```
+
+Close the HTTP client.
+
+<a id="fishaudio.core.client_wrapper.AsyncClientWrapper" />
+
+## AsyncClientWrapper Objects
+
+```python theme={null}
+class AsyncClientWrapper(BaseClientWrapper)
+```
+
+Wrapper for httpx.AsyncClient that handles authentication and error handling.
+
+<a id="fishaudio.core.client_wrapper.AsyncClientWrapper.request" />
+
+#### request
+
+```python theme={null}
+async def request(method: str,
+                  path: str,
+                  *,
+                  request_options: Optional[RequestOptions] = None,
+                  **kwargs: Any) -> httpx.Response
+```
+
+Make an async HTTP request with error handling.
+
+**Arguments**:
+
+* `method` - HTTP method (GET, POST, etc.)
+* `path` - API endpoint path
+* `request_options` - Optional request-level overrides
+* `**kwargs` - Additional arguments to pass to httpx.request
+
+**Returns**:
+
+httpx.Response object
+
+**Raises**:
+
+* `APIError` - On non-2xx responses
+
+<a id="fishaudio.core.client_wrapper.AsyncClientWrapper.client" />
+
+#### client
+
+```python theme={null}
+@property
+def client() -> httpx.AsyncClient
+```
+
+Get underlying httpx.AsyncClient for advanced usage (e.g., WebSockets).
+
+<a id="fishaudio.core.client_wrapper.AsyncClientWrapper.close" />
+
+#### close
+
+```python theme={null}
+async def close() -> None
+```
+
+Close the HTTP client.
+
+<a id="fishaudio.core.request_options" />
+
+# fishaudio.core.request\_options
+
+Request-level options for API calls.
+
+<a id="fishaudio.core.request_options.RequestOptions" />
+
+## RequestOptions Objects
+
+```python theme={null}
+class RequestOptions()
+```
+
+Options that can be provided on a per-request basis to override client defaults.
+
+**Attributes**:
+
+* `timeout` - Override the client's default timeout (in seconds)
+* `max_retries` - Override the client's default max retries
+* `additional_headers` - Additional headers to include in the request
+* `additional_query_params` - Additional query parameters to include
+
+<a id="fishaudio.core.request_options.RequestOptions.get_timeout" />
+
+#### get\_timeout
+
+```python theme={null}
+def get_timeout() -> Optional[httpx.Timeout]
+```
+
+Convert timeout to httpx.Timeout if set.
+
+<a id="fishaudio.core.iterators" />
+
+# fishaudio.core.iterators
+
+Audio stream wrappers with collection utilities.
+
+<a id="fishaudio.core.iterators.AudioStream" />
+
+## AudioStream Objects
+
+```python theme={null}
+class AudioStream()
+```
+
+Wrapper for sync audio byte streams with collection utilities.
+
+This class wraps an iterator of audio bytes and provides a convenient
+`.collect()` method to gather all chunks into a single bytes object.
+
+**Examples**:
+
+```python theme={null}
+from fishaudio import FishAudio
+
+client = FishAudio(api_key="...")
+
+# Collect all audio at once
+audio = client.tts.stream(text="Hello!").collect()
+
+# Or stream chunks manually
+for chunk in client.tts.stream(text="Hello!"):
+    process_chunk(chunk)
+```
+
+<a id="fishaudio.core.iterators.AudioStream.__init__" />
+
+#### \_\_init\_\_
+
+```python theme={null}
+def __init__(iterator: Iterator[bytes])
+```
+
+Initialize the audio iterator wrapper.
+
+**Arguments**:
+
+* `iterator` - The underlying iterator of audio bytes
+
+<a id="fishaudio.core.iterators.AudioStream.__iter__" />
+
+#### \_\_iter\_\_
+
+```python theme={null}
+def __iter__() -> Iterator[bytes]
+```
+
+Allow direct iteration over audio chunks.
+
+<a id="fishaudio.core.iterators.AudioStream.collect" />
+
+#### collect
+
+```python theme={null}
+def collect() -> bytes
+```
+
+Collect all audio chunks into a single bytes object.
+
+This consumes the iterator and returns all audio data as bytes.
+After calling this method, the iterator cannot be used again.
+
+**Returns**:
+
+Complete audio data as bytes
+
+**Examples**:
+
+```python theme={null}
+audio = client.tts.stream(text="Hello!").collect()
+with open("output.mp3", "wb") as f:
+    f.write(audio)
+```
+
+<a id="fishaudio.core.iterators.AsyncAudioStream" />
+
+## AsyncAudioStream Objects
+
+```python theme={null}
+class AsyncAudioStream()
+```
+
+Wrapper for async audio byte streams with collection utilities.
+
+This class wraps an async iterator of audio bytes and provides a convenient
+`.collect()` method to gather all chunks into a single bytes object.
+
+**Examples**:
+
+```python theme={null}
+from fishaudio import AsyncFishAudio
+
+client = AsyncFishAudio(api_key="...")
+
+# Collect all audio at once
+stream = await client.tts.stream(text="Hello!")
+audio = await stream.collect()
+
+# Or stream chunks manually
+async for chunk in await client.tts.stream(text="Hello!"):
+    await process_chunk(chunk)
+```
+
+<a id="fishaudio.core.iterators.AsyncAudioStream.__init__" />
+
+#### \_\_init\_\_
+
+```python theme={null}
+def __init__(async_iterator: AsyncIterator[bytes])
+```
+
+Initialize the async audio iterator wrapper.
+
+**Arguments**:
+
+* `async_iterator` - The underlying async iterator of audio bytes
+
+<a id="fishaudio.core.iterators.AsyncAudioStream.__aiter__" />
+
+#### \_\_aiter\_\_
+
+```python theme={null}
+def __aiter__() -> AsyncIterator[bytes]
+```
+
+Allow direct async iteration over audio chunks.
+
+<a id="fishaudio.core.iterators.AsyncAudioStream.collect" />
+
+#### collect
+
+```python theme={null}
+async def collect() -> bytes
+```
+
+Collect all audio chunks into a single bytes object.
+
+This consumes the async iterator and returns all audio data as bytes.
+After calling this method, the iterator cannot be used again.
+
+**Returns**:
+
+Complete audio data as bytes
+
+**Examples**:
+
+```python theme={null}
+stream = await client.tts.stream(text="Hello!")
+audio = await stream.collect()
+with open("output.mp3", "wb") as f:
+    f.write(audio)
+```
+
+<a id="fishaudio.core.websocket_options" />
+
+# fishaudio.core.websocket\_options
+
+WebSocket-level options for WebSocket connections.
+
+<a id="fishaudio.core.websocket_options.WebSocketOptions" />
+
+## WebSocketOptions Objects
+
+```python theme={null}
+class WebSocketOptions()
+```
+
+Options for configuring WebSocket connections.
+
+These options are passed directly to httpx\_ws's connect\_ws/aconnect\_ws functions.
+For complete documentation, see [https://frankie567.github.io/httpx-ws/reference/httpx\_ws/](https://frankie567.github.io/httpx-ws/reference/httpx_ws/)
+
+**Attributes**:
+
+* `keepalive_ping_timeout_seconds` - Maximum delay the client will wait for an answer
+  to its Ping event. If the delay is exceeded, WebSocketNetworkError will be
+  raised and the connection closed. Default: 20 seconds.
+* `keepalive_ping_interval_seconds` - Interval at which the client will automatically
+  send a Ping event to keep the connection alive. Set to None to disable this
+  mechanism. Default: 20 seconds.
+* `max_message_size_bytes` - Message size in bytes to receive from the server.
+* `Default` - 65536 bytes (64 KiB).
+* `queue_size` - Size of the queue where received messages will be held until they
+  are consumed. If the queue is full, the client will stop receiving messages
+  from the server until the queue has room available. Default: 512.
+
+**Notes**:
+
+Parameter descriptions adapted from httpx\_ws documentation.
+
+<a id="fishaudio.core.websocket_options.WebSocketOptions.to_httpx_ws_kwargs" />
+
+#### to\_httpx\_ws\_kwargs
+
+```python theme={null}
+def to_httpx_ws_kwargs() -> dict[str, Any]
+```
+
+Convert to kwargs dict for httpx\_ws aconnect\_ws/connect\_ws.
+
+<a id="fishaudio.core.omit" />
+
+# fishaudio.core.omit
+
+OMIT sentinel for distinguishing None from not-provided parameters.

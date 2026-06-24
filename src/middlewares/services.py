@@ -3,13 +3,13 @@ from typing import Any, Awaitable, Callable
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
 
-from services.tts import TTSService
-from services.queue import UserQueue
+from src.services.queue import UserQueue
+from src.services.tts import TTSService
 
 
 class ServicesMiddleware(BaseMiddleware):
-    def __init__(self, tts: TTSService, user_queue: UserQueue) -> None:
-        self.tts = tts
+    def __init__(self, tts_service: TTSService, user_queue: UserQueue) -> None:
+        self.tts_service = tts_service
         self.user_queue = user_queue
 
     async def __call__(
@@ -18,6 +18,6 @@ class ServicesMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
-        data["tts"] = self.tts
+        data["tts_service"] = self.tts_service
         data["user_queue"] = self.user_queue
         return await handler(event, data)

@@ -33,4 +33,4 @@ COPY --from=builder --chown=appuser:appgroup /app/src ./src/
 
 USER appuser
 
-CMD ["python", "-u", "src/bot.py"]
+CMD ["python", "-u", "-m", "src.main"]

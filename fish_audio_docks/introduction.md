@@ -1,0 +1,48 @@
+> ## Documentation Index
+> Fetch the complete documentation index at: https://docs.fish.audio/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Introduction
+
+> How to use the Fish Audio API
+
+## Welcome
+
+You can generate a new API key at [https://fish.audio/app/api-keys/](https://fish.audio/app/api-keys/).
+
+## Quick Start
+
+See our [Quick Start](/developer-guide/getting-started/quickstart) guide to generate audio in under 2 minutes.
+
+## Errors
+
+Every error returns a JSON body with a `message` and a `status`. See [Errors](/api-reference/errors) for the full status-code table, retry guidance, and SDK exception handling.
+
+## OpenAPI Schema
+
+Fish Audio publishes a canonical OpenAPI schema at [https://api.fish.audio/openapi.json](https://api.fish.audio/openapi.json).
+When working with AI coding agents or IDE assistants, mention this schema URL as part of your prompt or project context so the agent can understand Fish Audio's endpoints, request and response models, authentication requirements, and supported parameters directly from the machine-readable API contract.
+
+## Distributed Tracing
+
+Fish Audio inference APIs accept the W3C `traceparent` header so your business-side trace and Fish Audio's inference-side trace can share the same trace ID. See [Tracing & Performance Analysis](/api-reference/observability) for supported endpoints, examples, and enterprise performance analysis details.
+
+## Create a Voice Clone
+
+Use our [/model endpoint](/api-reference/endpoint/model/create-model) to create a voice clone model.
+
+## Generate Speech
+
+Use our [/v1/tts endpoint](/api-reference/endpoint/openapi-v1/text-to-speech) to generate speech.
+
+## Design a Voice
+
+Use our [/v1/voice-design endpoint](/api-reference/endpoint/openapi-v1/voice-design) to generate candidate voices from a prompt.
+
+## Real-time Streaming
+
+Use our [Python SDK](/features/realtime-streaming) or [JavaScript SDK](/features/realtime-streaming) for real-time audio streaming with WebSocket.
+
+## Rate Limits
+
+You can find the rate limits for each endpoint in the [Rate Limits](/developer-guide/models-pricing/pricing-and-rate-limits) section.
