@@ -6,12 +6,30 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand, BotCommandScopeDefault
+from loguru import logger
 
 from src.handlers import get_routers
 from src.middlewares.services import ServicesMiddleware
 from src.services.queue import UserQueue
 from src.services.tts import TTSService
 from src.settings import settings
+
+
+class _InterceptHandler(logging.Handler):
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            level = logger.level(record.levelname).name
+        except ValueError:
+            level = record.levelno
+        frame, depth = logging.currentframe(), 2
+        while frame and frame.f_code.co_filename == logging.__file__:
+            frame = frame.f_back
+            depth += 1
+        logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
+
+
+def _setup_logging() -> None:
+    logging.basicConfig(handlers=[_InterceptHandler()], level=0, force=True)
 
 
 async def _set_commands(bot: Bot) -> None:
@@ -27,16 +45,16 @@ async def _set_commands(bot: Bot) -> None:
 
 async def on_startup(bot: Bot) -> None:
     await _set_commands(bot)
-    logging.info("Bot started.")
+    logger.info("Bot started.")
 
 
 async def on_shutdown(tts_service: TTSService) -> None:
     await tts_service.close()
-    logging.info("Bot stopped.")
+    logger.info("Bot stopped.")
 
 
 async def main() -> None:
-    logging.basicConfig(level=logging.INFO)
+    _setup_logging()
 
     bot = Bot(
         token=settings.bot_token.get_secret_value(),

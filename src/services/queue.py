@@ -2,6 +2,7 @@ import asyncio
 from dataclasses import dataclass
 
 from aiogram import Bot
+from loguru import logger
 
 
 @dataclass
@@ -65,6 +66,7 @@ class UserQueue:
                 break
             try:
                 total = len(job.chunks)
+                logger.info("Job started: user={} file={} chunks={}", job.user_id, job.filename, total)
                 status = await self._bot.send_message(job.chat_id, f"0/{total}")
 
                 done = 0
@@ -95,11 +97,13 @@ class UserQueue:
                     BufferedInputFile(zip_buf.read(), filename=f"{stem}.zip"),
                 )
                 await status.delete()
+                logger.info("Job done: user={} file={}", job.user_id, job.filename)
 
                 if q.empty():
                     await self._bot.send_message(job.chat_id, "Очередь пуста.")
 
             except Exception as e:
+                logger.exception("Job failed: user={} file={}", job.user_id, job.filename)
                 await self._bot.send_message(job.chat_id, f"Ошибка: {e}")
             finally:
                 q.task_done()
