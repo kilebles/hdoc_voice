@@ -21,6 +21,7 @@ class UserQueue:
         self._tts = tts_service
         self._queues: dict[int, asyncio.Queue[TTSJob | None]] = {}
         self._workers: dict[int, asyncio.Task] = {}
+        self._sem = asyncio.Semaphore(5)
 
     def _ensure_worker(self, user_id: int) -> None:
         if user_id not in self._queues:
@@ -66,13 +67,12 @@ class UserQueue:
                 total = len(job.chunks)
                 status = await self._bot.send_message(job.chat_id, f"0/{total}")
 
-                sem = asyncio.Semaphore(5)
                 done = 0
                 audio_files: list[tuple[str, bytes]] = [("", b"")] * total
 
                 async def synthesize_chunk(idx: int, text: str) -> None:
                     nonlocal done
-                    async with sem:
+                    async with self._sem:
                         audio_bytes = await self._tts.synthesize(text, job.voice_id)
                     audio_files[idx] = (f"{idx + 1}.mp3", audio_bytes)
                     done += 1
