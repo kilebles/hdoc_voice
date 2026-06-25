@@ -21,16 +21,47 @@ def _voice_name(voice_id: str) -> str:
 
 def _parse_txt(data: bytes) -> list[str]:
     text = data.decode("utf-8")
-    return [c.strip() for c in text.split("\n\n") if c.strip()]
+    return [c.strip() for c in text.splitlines() if c.strip()]
 
 
 def _parse_docx(data: bytes) -> list[str]:
     import re
+    import zipfile
     from docx import Document  # type: ignore
 
     HEADING = re.compile(r'^(introduction|chapter\s+\d+)', re.IGNORECASE)
-    doc = Document(io.BytesIO(data))
-    return [p.text.strip() for p in doc.paragraphs if p.text.strip() and not HEADING.match(p.text.strip())]
+    AD = re.compile(r'subscribe to deepl|visit www\.deepl\.com', re.IGNORECASE)
+
+    # Some docx files have broken image references — patch the zip before opening
+    buf = io.BytesIO(data)
+    try:
+        with zipfile.ZipFile(buf) as zf:
+            names = set(zf.namelist())
+        # Rewrite file stripping missing media references is complex;
+        # instead just open with error handling below
+    except Exception:
+        pass
+
+    buf.seek(0)
+    try:
+        doc = Document(buf)
+    except KeyError:
+        # Fallback: extract XML directly without loading media
+        buf.seek(0)
+        with zipfile.ZipFile(buf) as zf:
+            xml = zf.read("word/document.xml")
+        import re as _re
+        from lxml import etree  # type: ignore
+        root = etree.fromstring(xml)
+        ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+        texts = []
+        for p in root.iter(f"{{{ns['w'].split('}')[0][1:]}}}p" if False else "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}p"):
+            text = "".join(t.text or "" for t in p.iter("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t")).strip()
+            if text and not HEADING.match(text) and not AD.search(text):
+                texts.append(text)
+        return texts
+
+    return [p.text.strip() for p in doc.paragraphs if p.text.strip() and not HEADING.match(p.text.strip()) and not AD.search(p.text.strip())]
 
 
 @router.callback_query(TTSForm.choosing_voice, F.data.startswith("voice:"))
@@ -84,7 +115,5 @@ async def on_file_received(
     )
     queue_size = await user_queue.enqueue(job)
 
-    if queue_size == 1:
-        await message.answer(f"Обрабатываю <b>{name}</b> ({len(chunks)} фрагментов)...")
-    else:
+    if queue_size > 1:
         await message.answer(f"<b>{name}</b> добавлен в очередь (позиция {queue_size}).")

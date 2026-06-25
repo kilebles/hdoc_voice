@@ -70,15 +70,19 @@ class UserQueue:
                 status = await self._bot.send_message(job.chat_id, f"0/{total}")
 
                 done = 0
+                last_edit = 0.0
                 audio_files: list[tuple[str, bytes]] = [("", b"")] * total
 
                 async def synthesize_chunk(idx: int, text: str) -> None:
-                    nonlocal done
+                    nonlocal done, last_edit
                     async with self._sem:
                         audio_bytes = await self._tts.synthesize(text, job.voice_id)
                     audio_files[idx] = (f"{idx + 1}.mp3", audio_bytes)
                     done += 1
-                    await status.edit_text(f"{done}/{total}")
+                    now = asyncio.get_event_loop().time()
+                    if done == total or now - last_edit >= 1.0:
+                        last_edit = now
+                        await status.edit_text(f"{done}/{total}")
 
                 await asyncio.gather(
                     *[synthesize_chunk(i, chunk) for i, chunk in enumerate(job.chunks)]
@@ -99,8 +103,6 @@ class UserQueue:
                 await status.delete()
                 logger.info("Job done: user={} file={}", job.user_id, job.filename)
 
-                if q.empty():
-                    await self._bot.send_message(job.chat_id, "Очередь пуста.")
 
             except Exception as e:
                 logger.exception("Job failed: user={} file={}", job.user_id, job.filename)

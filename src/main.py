@@ -37,7 +37,6 @@ async def _set_commands(bot: Bot) -> None:
         commands=[
             BotCommand(command="start",      description="Начать / выбрать голос"),
             BotCommand(command="clearqueue", description="Очистить очередь"),
-            BotCommand(command="cancel",     description="Отмена"),
         ],
         scope=BotCommandScopeDefault(),
     )

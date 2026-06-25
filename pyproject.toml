@@ -10,6 +10,7 @@ dependencies = [
     "loguru>=0.7.3",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.0",
+    "lxml>=5.0",
     "python-docx>=1.2.0",
     "fish-audio-sdk>=0.1.0",
 ]

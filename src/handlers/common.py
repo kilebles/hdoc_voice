@@ -17,18 +17,6 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
     await message.answer("Выберите голос:", reply_markup=voices_keyboard())
 
 
-@router.message(Command("cancel"))
-async def cmd_cancel(message: Message, state: FSMContext) -> None:
-    current = await state.get_state()
-    await state.clear()
-    await state.set_state(TTSForm.choosing_voice)
-    if current is None:
-        await message.answer("Нечего отменять.")
-    else:
-        await message.answer("Отменено.")
-    await message.answer("Выберите голос:", reply_markup=voices_keyboard())
-
-
 @router.message(Command("clearqueue"))
 async def cmd_clearqueue(message: Message, user_queue: UserQueue) -> None:
     removed = user_queue.clear(message.from_user.id)
