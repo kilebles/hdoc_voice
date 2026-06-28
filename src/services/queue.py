@@ -88,18 +88,32 @@ class UserQueue:
                     *[synthesize_chunk(i, chunk) for i, chunk in enumerate(job.chunks)]
                 )
 
-                zip_buf = io.BytesIO()
-                with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
-                    for fname, data in audio_files:
-                        zf.writestr(fname, data)
-                zip_buf.seek(0)
-
+                from aiogram.exceptions import TelegramEntityTooLarge
                 from aiogram.types import BufferedInputFile
+
                 stem = job.filename.rsplit(".", 1)[0]
-                await self._bot.send_document(
-                    job.chat_id,
-                    BufferedInputFile(zip_buf.read(), filename=f"{stem}.zip"),
-                )
+
+                async def send_zip(files: list[tuple[str, bytes]], suffix: str) -> None:
+                    buf = io.BytesIO()
+                    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+                        for fname, data in files:
+                            zf.writestr(fname, data)
+                    buf.seek(0)
+                    zip_bytes = buf.read()
+                    filename = f"{stem}{suffix}.zip"
+                    logger.info("Sending archive: {} ({:.1f} MB)", filename, len(zip_bytes) / 1024 / 1024)
+                    try:
+                        await self._bot.send_document(
+                            job.chat_id,
+                            BufferedInputFile(zip_bytes, filename=filename),
+                            request_timeout=300,
+                        )
+                    except TelegramEntityTooLarge:
+                        mid = len(files) // 2
+                        await send_zip(files[:mid], f"{suffix}_1")
+                        await send_zip(files[mid:], f"{suffix}_2")
+
+                await send_zip(audio_files, "")
                 await status.delete()
                 logger.info("Job done: user={} file={}", job.user_id, job.filename)
 

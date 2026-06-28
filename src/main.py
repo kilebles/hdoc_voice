@@ -30,6 +30,13 @@ class _InterceptHandler(logging.Handler):
 
 def _setup_logging() -> None:
     logging.basicConfig(handlers=[_InterceptHandler()], level=0, force=True)
+    logger.add(
+        "/app/logs/bot.log",
+        rotation="10 MB",
+        retention="7 days",
+        compression="gz",
+        level="DEBUG",
+    )
 
 
 async def _set_commands(bot: Bot) -> None:

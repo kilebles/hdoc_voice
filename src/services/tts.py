@@ -6,8 +6,8 @@ class TTSService:
     def __init__(self, api_key: str) -> None:
         self._client = AsyncFishAudio(api_key=api_key)
         self._config = TTSConfig(
-            temperature=0.9,
-            top_p=0.9,
+            temperature=1.0,
+            top_p=0.8,
             repetition_penalty=1.3,
             mp3_bitrate=192,
             latency="normal",

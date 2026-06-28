@@ -29,7 +29,7 @@ def _parse_docx(data: bytes) -> list[str]:
     import zipfile
     from docx import Document  # type: ignore
 
-    HEADING = re.compile(r'^(introduction|chapter\s+\d+)', re.IGNORECASE)
+    HEADING = re.compile(r'^(introduction|chapter\s+\d+|part\s+\d+|conclusion|epilogue|prologue)', re.IGNORECASE)
     AD = re.compile(r'subscribe to deepl|visit www\.deepl\.com', re.IGNORECASE)
 
     # Some docx files have broken image references — patch the zip before opening
