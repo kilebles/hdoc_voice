@@ -29,7 +29,8 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1
 
 RUN addgroup --system appgroup && \
-    adduser --system --ingroup appgroup --no-create-home appuser
+    adduser --system --ingroup appgroup --no-create-home appuser && \
+    mkdir -p /app/logs && chown appuser:appgroup /app/logs
 
 COPY --from=builder --chown=appuser:appgroup /app/src ./src/
 
