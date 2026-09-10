@@ -15,4 +15,5 @@ VOICES: list[Voice] = [
     Voice(name="Голос 7", id="79b534a1718e4088a136706594cc1da0"),
     Voice(name="Голос 8 (Laura)", id="e3cd384158934cc9a01029cd7d278634"),
     Voice(name="Голос 9 (Dec1)", id="991d730f2f4a42a7b50467cf502350ec"),
+    Voice(name="Голос 10", id="211282d53ffb4f4f852b9915ea39bd9a"),
 ]
