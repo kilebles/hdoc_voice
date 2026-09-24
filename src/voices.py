@@ -23,4 +23,7 @@ VOICES: list[Voice] = [
     Voice(name="Голос 15 (Rome 1 ESP)", id="dfa5b230c8054f429e434f4a6e9bbdec"),
     Voice(name="Голос 16 (Rome 1 POR)", id="04736e4d6a644abab81e601a7d2ae4b9"),
     Voice(name="Голос 17 (Rome 1 GER)", id="90042f762dbf49baa2e7776d011eee6b"),
+    Voice(name="Голос 18 (FR)", id="9f0935a47689459480b820ed3f6d782d"),
+    Voice(name="Голос 19 (PL)", id="2532d01f4c59446d9e2144803b73e9da"),
+    Voice(name="Голос 20 (ITA)", id="14e71c0c9fb54062b0fd713aed6cf5a0"),
 ]
