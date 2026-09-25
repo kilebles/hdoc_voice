@@ -40,6 +40,14 @@ def _parse_docx(data: bytes) -> list[str]:
         re.IGNORECASE,
     )
     AD = re.compile(r'subscribe to deepl|visit www\.deepl\.com', re.IGNORECASE)
+    SENTENCE_END = '.!?…»"”“)'
+
+    def skip(text: str, style: str = "") -> bool:
+        if not text or AD.search(text) or HEADING.match(text):
+            return True
+        if style.lower().startswith(("heading", "title", "заголов", "название")):
+            return True
+        return len(text) <= 120 and text[-1] not in SENTENCE_END
 
     # Some docx files have broken image references — patch the zip before opening
     buf = io.BytesIO(data)
@@ -66,11 +74,11 @@ def _parse_docx(data: bytes) -> list[str]:
         texts = []
         for p in root.iter(f"{{{ns['w'].split('}')[0][1:]}}}p" if False else "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}p"):
             text = "".join(t.text or "" for t in p.iter("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t")).strip()
-            if text and not HEADING.match(text) and not AD.search(text):
+            if not skip(text):
                 texts.append(text)
         return texts
 
-    return [p.text.strip() for p in doc.paragraphs if p.text.strip() and not HEADING.match(p.text.strip()) and not AD.search(p.text.strip())]
+    return [p.text.strip() for p in doc.paragraphs if not skip(p.text.strip(), p.style.name)]
 
 
 @router.callback_query(TTSForm.choosing_voice, F.data.startswith("voice:"))
