@@ -78,7 +78,11 @@ def _parse_docx(data: bytes) -> list[str]:
                 texts.append(text)
         return texts
 
-    return [p.text.strip() for p in doc.paragraphs if not skip(p.text.strip(), p.style.name)]
+    return [
+        p.text.strip()
+        for p in doc.paragraphs
+        if not skip(p.text.strip(), p.style.name if p.style is not None else "")
+    ]
 
 
 @router.callback_query(TTSForm.choosing_voice, F.data.startswith("voice:"))
