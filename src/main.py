@@ -5,7 +5,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import BotCommand, BotCommandScopeDefault
+from aiogram.types import BotCommand, BotCommandScopeDefault, ErrorEvent
 from loguru import logger
 
 from src.handlers import get_routers
@@ -59,6 +59,28 @@ async def on_shutdown(tts_service: TTSService) -> None:
     logger.info("Bot stopped.")
 
 
+async def on_error(event: ErrorEvent, bot: Bot) -> None:
+    logger.exception("Unhandled error while processing update: {}", event.exception)
+
+    update = event.update
+    chat_id: int | None = None
+    if update.message is not None:
+        chat_id = update.message.chat.id
+    elif update.callback_query is not None:
+        if update.callback_query.message is not None:
+            chat_id = update.callback_query.message.chat.id
+        try:
+            await bot.answer_callback_query(update.callback_query.id, text="Произошла ошибка")
+        except Exception:
+            pass
+
+    if chat_id is not None:
+        try:
+            await bot.send_message(chat_id, "Что-то пошло не так. Попробуйте ещё раз.")
+        except Exception:
+            pass
+
+
 async def main() -> None:
     _setup_logging()
 
@@ -72,6 +94,7 @@ async def main() -> None:
     dp = Dispatcher(storage=MemoryStorage())
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
+    dp.errors.register(on_error)
 
     middleware = ServicesMiddleware(tts_service=tts_service, user_queue=user_queue)
     dp.message.middleware(middleware)

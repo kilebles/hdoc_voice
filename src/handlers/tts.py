@@ -3,6 +3,7 @@ import io
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
+from loguru import logger
 
 from src.keyboards.voices import voices_keyboard
 from src.services.queue import TTSJob, UserQueue
@@ -62,12 +63,11 @@ def _parse_docx(data: bytes) -> list[str]:
     buf.seek(0)
     try:
         doc = Document(buf)
-    except KeyError:
+    except Exception:
         # Fallback: extract XML directly without loading media
         buf.seek(0)
         with zipfile.ZipFile(buf) as zf:
             xml = zf.read("word/document.xml")
-        import re as _re
         from lxml import etree  # type: ignore
         root = etree.fromstring(xml)
         ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
@@ -116,13 +116,24 @@ async def on_file_received(
         return
 
     # Download
-    file = await message.bot.get_file(doc.file_id)
-    buf = io.BytesIO()
-    await message.bot.download_file(file.file_path, destination=buf)
-    raw = buf.getvalue()
+    try:
+        file = await message.bot.get_file(doc.file_id)
+        buf = io.BytesIO()
+        await message.bot.download_file(file.file_path, destination=buf)
+        raw = buf.getvalue()
+    except Exception:
+        logger.exception("Failed to download file: user={} file={}", message.from_user.id, name)
+        await message.answer("Не удалось скачать файл. Попробуйте отправить его ещё раз.")
+        return
 
     # Parse
-    chunks = _parse_txt(raw) if name.endswith(".txt") else _parse_docx(raw)
+    try:
+        chunks = _parse_txt(raw) if name.endswith(".txt") else _parse_docx(raw)
+    except Exception:
+        logger.exception("Failed to parse file: user={} file={}", message.from_user.id, name)
+        await message.answer("Не удалось прочитать файл. Проверьте, что он не повреждён.")
+        return
+
     if not chunks:
         await message.answer("Файл пустой.")
         return
